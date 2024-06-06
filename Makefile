@@ -45,7 +45,7 @@ farewell:
 #Defines a target named run. This target will run KOZMOAI Assistant on the folder with the given name.
 run:
 	@echo -e "$(COLOR_CYAN)Running KOZMOAI Assistant on $(COLOR_GREEN)$(name)$(COLOR_CYAN) folder...$(COLOR_RESET)" && \
-	poetry run kozmoai-assistant projects/$(name)
+	poetry run kozmoai-assistant transformers/$(name)
 
 # Counts the lines of code in the project
 cloc:

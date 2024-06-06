@@ -1,0 +1,172 @@
+
+2024-06-06T07:55:18.601335
+================================ System Message ================================
+
+You will get information about a codebase that is currently on disk in the current folder.
+The user will ask you to write a script that runs the code in a specific way.
+You will answer with code blocks that include all the necessary terminal commands.
+Do not install globally. Do not use sudo.
+Do not explain the code, just give the commands.
+Do not use placeholders, use example values (like . for a folder argument) if necessary.
+
+
+================================ Human Message =================================
+
+
+        Make a unix script that
+        a) installs dependencies
+        b) runs all necessary parts of the codebase (in parallel if necessary)
+        
+Information about the codebase:
+
+```
+File: Structure
+1 azure_file_processor/
+2     __init__.py
+3     main.py
+4     azure_file_manager.py
+5     file_processor.py
+6     schema_loader.py
+7     parquet_writer.py
+8 requirements.txt
+
+File: requirements.txt
+1 azure-storage-file-share
+2 azure-storage-blob
+3 pandas
+4 pyyaml
+5 pyarrow
+
+File: azure_file_processor/main.py
+1 from azure_file_processor.azure_file_manager import AzureFileManager
+2 from azure_file_processor.file_processor import FileProcessor
+3 from azure_file_processor.schema_loader import SchemaLoader
+4 from azure_file_processor.parquet_writer import ParquetWriter
+5 
+6 def main():
+7     # Configuration
+8     file_share_name = "your-file-share-name"
+9     file_share_directory = "your-directory"
+10     connection_string = "your-azure-storage-connection-string"
+11     schema_file_path = "path/to/your/schema.yaml"
+12     blob_container_name = "your-blob-container"
+13     blob_connection_string = "your-blob-connection-string"
+14 
+15     # Initialize components
+16     azure_file_manager = AzureFileManager(connection_string, file_share_name, file_share_directory)
+17     schema_loader = SchemaLoader(schema_file_path)
+18     parquet_writer = ParquetWriter(blob_connection_string, blob_container_name)
+19 
+20     # Process files
+21     file_processor = FileProcessor(azure_file_manager, schema_loader, parquet_writer)
+22     file_processor.process_files()
+23 
+24 if __name__ == "__main__":
+25     main()
+
+File: azure_file_processor/azure_file_manager.py
+1 from azure.storage.fileshare import ShareFileClient, ShareDirectoryClient
+2 import re
+3 from typing import List
+4 
+5 class AzureFileManager:
+6     def __init__(self, connection_string: str, file_share_name: str, directory: str):
+7         self.connection_string = connection_string
+8         self.file_share_name = file_share_name
+9         self.directory = directory
+10 
+11     def list_files(self) -> List[str]:
+12         directory_client = ShareDirectoryClient.from_connection_string(self.connection_string, self.file_share_name, self.directory)
+13         files = []
+14         for item in directory_client.list_directories_and_files():
+15             if item['is_directory']:
+16                 continue
+17             files.append(item['name'])
+18         return files
+19 
+20     def download_file(self, file_name: str) -> str:
+21         file_client = ShareFileClient.from_connection_string(self.connection_string, self.file_share_name, f"{self.directory}/{file_name}")
+22         download_path = f"/tmp/{file_name}"
+23         with open(download_path, "wb") as file:
+24             data = file_client.download_file()
+25             data.readinto(file)
+26         return download_path
+
+File: azure_file_processor/file_processor.py
+1 import re
+2 import pandas as pd
+3 from datetime import datetime
+4 from azure_file_processor.azure_file_manager import AzureFileManager
+5 from azure_file_processor.schema_loader import SchemaLoader
+6 from azure_file_processor.parquet_writer import ParquetWriter
+7 
+8 class FileProcessor:
+9     def __init__(self, azure_file_manager: AzureFileManager, schema_loader: SchemaLoader, parquet_writer: ParquetWriter):
+10         self.azure_file_manager = azure_file_manager
+11         self.schema_loader = schema_loader
+12         self.parquet_writer = parquet_writer
+13 
+14     def process_files(self):
+15         files = self.azure_file_manager.list_files()
+16         regex = re.compile(r"Refunds_(\d{8})\.json")
+17         matched_files = [f for f in files if regex.match(f)]
+18         
+19         if not matched_files:
+20             print("No matching files found.")
+21             return
+22 
+23         latest_file = max(matched_files, key=lambda x: datetime.strptime(regex.match(x).group(1), "%Y%m%d"))
+24         file_path = self.azure_file_manager.download_file(latest_file)
+25 
+26         df = pd.read_json(file_path)
+27         schema = self.schema_loader.load_schema()
+28         df = df.astype(schema)
+29 
+30         date_str = regex.match(latest_file).group(1)
+31         date = datetime.strptime(date_str, "%Y%m%d")
+32         partition_path = f"{date.year}/{date.month:02d}/{date.day:02d}"
+33 
+34         self.parquet_writer.write_parquet(df, partition_path)
+
+File: azure_file_processor/schema_loader.py
+1 import yaml
+2 
+3 class SchemaLoader:
+4     def __init__(self, schema_file_path: str):
+5         self.schema_file_path = schema_file_path
+6 
+7     def load_schema(self) -> dict:
+8         with open(self.schema_file_path, 'r') as file:
+9             schema = yaml.safe_load(file)
+10         return schema
+
+File: azure_file_processor/parquet_writer.py
+1 import pandas as pd
+2 from azure.storage.blob import BlobServiceClient
+3 
+4 class ParquetWriter:
+5     def __init__(self, connection_string: str, container_name: str):
+6         self.blob_service_client = BlobServiceClient.from_connection_string(connection_string)
+7         self.container_name = container_name
+8 
+9     def write_parquet(self, df: pd.DataFrame, partition_path: str):
+10         parquet_path = f"/tmp/data.parquet"
+11         df.to_parquet(parquet_path, index=False)
+12 
+13         blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=f"{partition_path}/data.parquet")
+14         with open(parquet_path, "rb") as data:
+15             blob_client.upload_blob(data, overwrite=True)
+
+```
+
+================================== Ai Message ==================================
+
+```sh
+#!/bin/bash
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the main script
+python azure_file_processor/main.py
+```

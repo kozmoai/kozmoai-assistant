@@ -1,0 +1,8 @@
+project_root/
+│
+├── src/
+│   ├── azure_file_share_client.py
+│   ├── file_processor.py
+│   └── main.py
+├── .env
+└── requirements.txt

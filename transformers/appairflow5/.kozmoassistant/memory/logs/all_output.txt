@@ -1,0 +1,208 @@
+
+2024-06-06T08:20:13.945993
+================================ System Message ================================
+
+You will get instructions for code to write.
+You will write a very long answer. Make sure that every detail of the architecture is, in the end, implemented as code.
+Think step by step and reason yourself to the correct decisions to make sure we get it right.
+First lay out the names of the core classes, functions, methods that will be necessary, As well as a quick comment on their purpose.
+
+You will output the content of each file necessary to achieve the goal, including ALL code.
+Represent files like so:
+
+FILENAME
+```
+CODE
+```
+
+The following tokens must be replaced like so:
+FILENAME is the lowercase combined path and file name including the file extension
+CODE is the code in the file
+
+Example representation of a file:
+
+src/hello_world.py
+```
+print("Hello World")
+```
+
+Do not comment on what every file does. Please note that the code should be fully functional. No placeholders.
+
+
+You will start with the "entrypoint" file, then go to the ones that are imported by that file, and so on.
+Please note that the code should be fully functional. No placeholders.
+
+Follow a language and framework appropriate best practice file naming convention.
+Make sure that files contain all imports, types etc.  The code should be fully functional. Make sure that code in different files are compatible with each other.
+Ensure to implement all code, if you are unsure, write a plausible implementation.
+Include module dependency or package manager dependency definition file.
+Before you finish, double check that all parts of the architecture is present in the files.
+
+When you are done, write finish with "this concludes a fully working implementation".
+
+Useful to know:
+Almost always put different classes in different files.
+Always use the programming language the user asks for.
+For Python, you always create an appropriate requirements.txt file.
+For NodeJS, you always create an appropriate package.json file.
+Always add a comment briefly describing the purpose of the function definition.
+Add comments explaining very complex bits of logic.
+Always follow the best practices for the requested languages for folder/file structure and how to package the project.
+
+
+Python toolbelt preferences:
+- pytest
+- dataclasses
+
+
+================================ Human Message =================================
+
+Request: I need an airflow python operator that lists all json files in a specific path in azure files share based on a regex match if the file name starts with `Refunds_`, then reads the latest file based on regex match `Refunds_` and a date in the file name, for example I have 4 files under the same path : Refunds_20240606.json / Refunds_20240605.json / Ref_20240607.json / Refunds_rejections_20240606.json, the code should read only one file Refunds_20240606.json, then applies a specific schema to the loaded dataframe base on an input schema from yaml file  then writes the dataframe into a parquet in azure blob storage based an a partition YYYY/MM/DD created from the date in the file name
+
+================================== Ai Message ==================================
+
+To achieve this, we will create a custom Airflow operator that performs the following tasks:
+
+1. Lists all JSON files in a specific path in Azure File Share based on a regex match if the file name starts with `Refunds_`.
+2. Reads the latest file based on the regex match `Refunds_` and a date in the file name.
+3. Applies a specific schema to the loaded DataFrame based on an input schema from a YAML file.
+4. Writes the DataFrame into a Parquet file in Azure Blob Storage based on a partition `YYYY/MM/DD` created from the date in the file name.
+
+We will use the following core classes and functions:
+- `AzureFileShareHook`: A hook to interact with Azure File Share.
+- `AzureBlobStorageHook`: A hook to interact with Azure Blob Storage.
+- `RefundsFileOperator`: A custom Airflow operator to perform the tasks.
+- `load_schema_from_yaml`: A function to load the schema from a YAML file.
+- `apply_schema_to_dataframe`: A function to apply the schema to the DataFrame.
+
+We will also need a `requirements.txt` file to specify the dependencies.
+
+Let's start with the implementation:
+
+### requirements.txt
+```
+apache-airflow
+azure-storage-file-share
+azure-storage-blob
+pandas
+pyyaml
+```
+
+### dags/refunds_file_operator.py
+```python
+from airflow.models import BaseOperator
+from airflow.utils.decorators import apply_defaults
+from azure.storage.fileshare import ShareFileClient
+from azure.storage.blob import BlobServiceClient
+import pandas as pd
+import yaml
+import re
+from datetime import datetime
+
+class AzureFileShareHook:
+    def __init__(self, connection_string, share_name):
+        self.connection_string = connection_string
+        self.share_name = share_name
+
+    def list_files(self, directory_path):
+        file_client = ShareFileClient.from_connection_string(self.connection_string, self.share_name, directory_path)
+        return [file.name for file in file_client.list_directories_and_files()]
+
+    def read_file(self, file_path):
+        file_client = ShareFileClient.from_connection_string(self.connection_string, self.share_name, file_path)
+        return file_client.download_file().readall().decode('utf-8')
+
+class AzureBlobStorageHook:
+    def __init__(self, connection_string, container_name):
+        self.connection_string = connection_string
+        self.container_name = container_name
+
+    def upload_file(self, file_path, data):
+        blob_service_client = BlobServiceClient.from_connection_string(self.connection_string)
+        blob_client = blob_service_client.get_blob_client(container=self.container_name, blob=file_path)
+        blob_client.upload_blob(data, overwrite=True)
+
+def load_schema_from_yaml(schema_path):
+    with open(schema_path, 'r') as file:
+        return yaml.safe_load(file)
+
+def apply_schema_to_dataframe(df, schema):
+    for column, dtype in schema.items():
+        df[column] = df[column].astype(dtype)
+    return df
+
+class RefundsFileOperator(BaseOperator):
+    @apply_defaults
+    def __init__(self, azure_file_share_conn_str, azure_blob_storage_conn_str, share_name, container_name, directory_path, schema_path, *args, **kwargs):
+        super(RefundsFileOperator, self).__init__(*args, **kwargs)
+        self.azure_file_share_conn_str = azure_file_share_conn_str
+        self.azure_blob_storage_conn_str = azure_blob_storage_conn_str
+        self.share_name = share_name
+        self.container_name = container_name
+        self.directory_path = directory_path
+        self.schema_path = schema_path
+
+    def execute(self, context):
+        file_share_hook = AzureFileShareHook(self.azure_file_share_conn_str, self.share_name)
+        blob_storage_hook = AzureBlobStorageHook(self.azure_blob_storage_conn_str, self.container_name)
+
+        # List files in the directory
+        files = file_share_hook.list_files(self.directory_path)
+        
+        # Filter files based on regex match
+        regex = re.compile(r'^Refunds_\d{8}\.json$')
+        matched_files = [f for f in files if regex.match(f)]
+
+        if not matched_files:
+            self.log.info("No matching files found.")
+            return
+
+        # Find the latest file based on date in the file name
+        latest_file = max(matched_files, key=lambda f: datetime.strptime(f.split('_')[1].split('.')[0], '%Y%m%d'))
+
+        # Read the latest file
+        file_content = file_share_hook.read_file(f"{self.directory_path}/{latest_file}")
+        df = pd.read_json(file_content)
+
+        # Load schema from YAML file
+        schema = load_schema_from_yaml(self.schema_path)
+
+        # Apply schema to DataFrame
+        df = apply_schema_to_dataframe(df, schema)
+
+        # Extract date from file name for partitioning
+        file_date = datetime.strptime(latest_file.split('_')[1].split('.')[0], '%Y%m%d')
+        partition_path = f"{file_date.year}/{file_date.month:02d}/{file_date.day:02d}"
+
+        # Write DataFrame to Parquet in Azure Blob Storage
+        parquet_data = df.to_parquet(index=False)
+        blob_storage_hook.upload_file(f"{partition_path}/Refunds.parquet", parquet_data)
+
+### dags/refunds_dag.py
+```python
+from airflow import DAG
+from datetime import datetime
+from refunds_file_operator import RefundsFileOperator
+
+default_args = {
+    'owner': 'airflow',
+    'start_date': datetime(2023, 1, 1),
+    'retries': 1,
+}
+
+with DAG('refunds_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
+    refunds_task = RefundsFileOperator(
+        task_id='process_refunds_file',
+        azure_file_share_conn_str='your_azure_file_share_connection_string',
+        azure_blob_storage_conn_str='your_azure_blob_storage_connection_string',
+        share_name='your_share_name',
+        container_name='your_container_name',
+        directory_path='your_directory_path',
+        schema_path='path_to_your_schema.yaml'
+    )
+
+    refunds_task
+```
+
+### Conclusion
+This concludes a fully working implementation.

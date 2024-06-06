@@ -1,0 +1,7 @@
+{
+    "conn_id": "azure_blob_storage_default",
+    "conn_type": "azure_blob_storage",
+    "host": "https://<your-account-name>.blob.core.windows.net",
+    "login": "<your-account-name>",
+    "password": "<your-account-key>"
+}

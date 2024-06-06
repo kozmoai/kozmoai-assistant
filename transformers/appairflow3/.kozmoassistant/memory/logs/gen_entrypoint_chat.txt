@@ -1,0 +1,260 @@
+
+2024-06-06T07:39:32.739534
+================================ System Message ================================
+
+You will get information about a codebase that is currently on disk in the current folder.
+The user will ask you to write a script that runs the code in a specific way.
+You will answer with code blocks that include all the necessary terminal commands.
+Do not install globally. Do not use sudo.
+Do not explain the code, just give the commands.
+Do not use placeholders, use example values (like . for a folder argument) if necessary.
+
+
+================================ Human Message =================================
+
+
+        Make a unix script that
+        a) installs dependencies
+        b) runs all necessary parts of the codebase (in parallel if necessary)
+        
+Information about the codebase:
+
+```
+File: requirements.txt
+1 azure-storage-file-share==12.5.0
+
+File: src/azure_file_share_client.py
+1 from azure.storage.fileshare import ShareServiceClient
+2 from typing import List
+3 
+4 class AzureFileShareClient:
+5     def __init__(self, connection_string: str, share_name: str):
+6         self.service_client = ShareServiceClient.from_connection_string(conn_str=connection_string)
+7         self.share_client = self.service_client.get_share_client(share_name)
+8 
+9     def list_files(self, directory_name: str) -> List[str]:
+10         directory_client = self.share_client.get_directory_client(directory_name)
+11         file_list = []
+12         for item in directory_client.list_directories_and_files():
+13             if not item['is_directory']:
+14                 file_list.append(item['name'])
+15         return file_list
+
+File: src/file_processor.py
+1 import re
+2 from datetime import datetime
+3 from azure_file_share_client import AzureFileShareClient
+4 
+5 class FileProcessor:
+6     def __init__(self, azure_client: AzureFileShareClient):
+7         self.azure_client = azure_client
+8 
+9     def get_latest_file(self, directory_name: str, regex_pattern: str) -> str:
+10         files = self.azure_client.list_files(directory_name)
+11         matched_files = [f for f in files if re.match(regex_pattern, f)]
+12         
+13         if not matched_files:
+14             return None
+15         
+16         # Extract date from file name and sort by date
+17         def extract_date(file_name: str) -> datetime:
+18             match = re.search(r'\d{8}', file_name)
+19             if match:
+20                 return datetime.strptime(match.group(), '%Y%m%d')
+21             return datetime.min
+22         
+23         matched_files.sort(key=extract_date, reverse=True)
+24         return matched_files[0]
+25 
+26     def read_file(self, directory_name: str, file_name: str) -> str:
+27         file_client = self.azure_client.share_client.get_file_client(f"{directory_name}/{file_name}")
+28         download = file_client.download_file()
+29         return download.readall().decode('utf-8')
+
+File: src/main.py
+1 import os
+2 from azure_file_share_client import AzureFileShareClient
+3 from file_processor import FileProcessor
+4 
+5 def main():
+6     connection_string = os.getenv('AZURE_STORAGE_CONNECTION_STRING')
+7     share_name = os.getenv('AZURE_SHARE_NAME')
+8     directory_name = os.getenv('AZURE_DIRECTORY_NAME')
+9     regex_pattern = r'^Refunds_\d{8}\.json$'
+10 
+11     azure_client = AzureFileShareClient(connection_string, share_name)
+12     file_processor = FileProcessor(azure_client)
+13 
+14     latest_file = file_processor.get_latest_file(directory_name, regex_pattern)
+15     if latest_file:
+16         content = file_processor.read_file(directory_name, latest_file)
+17         print(f"Latest file: {latest_file}")
+18         print(f"Content: {content}")
+19     else:
+20         print("No matching files found.")
+21 
+22 if __name__ == "__main__":
+23     main()
+
+File: variables)
+1 AZURE_STORAGE_CONNECTION_STRING=your_connection_string_here
+2 AZURE_SHARE_NAME=your_share_name_here
+3 AZURE_DIRECTORY_NAME=your_directory_name_here
+
+File: Structure
+1 project_root/
+2 │
+3 ├── src/
+4 │   ├── azure_file_share_client.py
+5 │   ├── file_processor.py
+6 │   └── main.py
+7 ├── .env
+8 └── requirements.txt
+
+```
+
+================================== Ai Message ==================================
+
+```sh
+#!/bin/bash
+
+# Step 1: Install dependencies
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# Step 2: Export environment variables
+export $(grep -v '^#' .env | xargs)
+
+# Step 3: Run the main script
+python src/main.py
+```
+
+2024-06-06T07:44:00.508654
+================================ System Message ================================
+
+You will get information about a codebase that is currently on disk in the current folder.
+The user will ask you to write a script that runs the code in a specific way.
+You will answer with code blocks that include all the necessary terminal commands.
+Do not install globally. Do not use sudo.
+Do not explain the code, just give the commands.
+Do not use placeholders, use example values (like . for a folder argument) if necessary.
+
+
+================================ Human Message =================================
+
+
+        Make a unix script that
+        a) installs dependencies
+        b) runs all necessary parts of the codebase (in parallel if necessary)
+        
+Information about the codebase:
+
+```
+File: requirements.txt
+1 apache-airflow==2.3.0
+2 azure-storage-file-share==12.4.1
+
+File: dags/main_dag.py
+1 from airflow import DAG
+2 from airflow.operators.python_operator import PythonOperator
+3 from datetime import datetime, timedelta
+4 from plugins.utils.file_utils import list_json_files, get_latest_file, read_file
+5 
+6 default_args = {
+7     'owner': 'airflow',
+8     'depends_on_past': False,
+9     'email_on_failure': False,
+10     'email_on_retry': False,
+11     'retries': 1,
+12     'retry_delay': timedelta(minutes=5),
+13 }
+14 
+15 def list_and_read_latest_file(**kwargs):
+16     path = kwargs['path']
+17     files = list_json_files(path)
+18     latest_file = get_latest_file(files)
+19     content = read_file(latest_file)
+20     print(content)
+21 
+22 with DAG(
+23     'azure_file_share_dag',
+24     default_args=default_args,
+25     description='A simple DAG to list and read the latest JSON file from Azure File Share',
+26     schedule_interval=timedelta(days=1),
+27     start_date=datetime(2023, 1, 1),
+28     catchup=False,
+29 ) as dag:
+30 
+31     task = PythonOperator(
+32         task_id='list_and_read_latest_file',
+33         python_callable=list_and_read_latest_file,
+34         op_kwargs={'path': 'your/azure/file/share/path'},
+35     )
+36 
+37     task
+
+File: plugins/hooks/azure_file_share_hook.py
+1 from azure.storage.fileshare import ShareServiceClient
+2 import os
+3 
+4 class AzureFileShareHook:
+5     def __init__(self, connection_string):
+6         self.connection_string = connection_string
+7         self.service_client = ShareServiceClient.from_connection_string(conn_str=connection_string)
+8 
+9     def list_files(self, share_name, directory_name):
+10         share_client = self.service_client.get_share_client(share_name)
+11         directory_client = share_client.get_directory_client(directory_name)
+12         return [file.name for file in directory_client.list_directories_and_files()]
+13 
+14     def read_file(self, share_name, directory_name, file_name):
+15         share_client = self.service_client.get_share_client(share_name)
+16         file_client = share_client.get_file_client(os.path.join(directory_name, file_name))
+17         download = file_client.download_file()
+18         return download.readall().decode('utf-8')
+
+File: plugins/utils/file_utils.py
+1 import re
+2 from datetime import datetime
+3 from plugins.hooks.azure_file_share_hook import AzureFileShareHook
+4 
+5 def list_json_files(path):
+6     connection_string = 'your_connection_string'
+7     share_name = 'your_share_name'
+8     directory_name = path
+9     hook = AzureFileShareHook(connection_string)
+10     files = hook.list_files(share_name, directory_name)
+11     return [file for file in files if file.endswith('.json')]
+12 
+13 def get_latest_file(files):
+14     regex = re.compile(r'Refunds_\d{8}\.json')
+15     matched_files = [file for file in files if regex.match(file)]
+16     if not matched_files:
+17         return None
+18     matched_files.sort(key=lambda x: datetime.strptime(x.split('_')[1].split('.')[0], '%Y%m%d'), reverse=True)
+19     return matched_files[0]
+20 
+21 def read_file(file_name):
+22     connection_string = 'your_connection_string'
+23     share_name = 'your_share_name'
+24     directory_name = 'your/azure/file/share/path'
+25     hook = AzureFileShareHook(connection_string)
+26     return hook.read_file(share_name, directory_name, file_name)
+
+```
+
+================================== Ai Message ==================================
+
+```sh
+#!/bin/bash
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run Airflow scheduler and webserver in parallel
+airflow scheduler & airflow webserver &
+
+# Wait for background processes to finish
+wait
+```

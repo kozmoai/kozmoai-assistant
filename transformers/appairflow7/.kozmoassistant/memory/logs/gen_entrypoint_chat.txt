@@ -1,0 +1,207 @@
+
+2024-06-06T08:32:44.260119
+================================ System Message ================================
+
+You will get information about a codebase that is currently on disk in the current folder.
+The user will ask you to write a script that runs the code in a specific way.
+You will answer with code blocks that include all the necessary terminal commands.
+Do not install globally. Do not use sudo.
+Do not explain the code, just give the commands.
+Do not use placeholders, use example values (like . for a folder argument) if necessary.
+
+
+================================ Human Message =================================
+
+
+        Make a unix script that
+        a) installs dependencies
+        b) runs all necessary parts of the codebase (in parallel if necessary)
+        
+Information about the codebase:
+
+```
+File: Structure
+1 airflow_dags/
+2 ├── dags/
+3 │   └── refunds_processing_dag.py
+4 ├── hooks/
+5 │   ├── azure_file_share_hook.py
+6 │   └── azure_blob_storage_hook.py
+7 ├── utils/
+8 │   ├── file_operations.py
+9 │   └── dataframe_operations.py
+10 └── requirements.txt
+
+File: requirements.txt
+1 apache-airflow==2.3.0
+2 azure-storage-file-share==12.4.1
+3 azure-storage-blob==12.8.1
+4 pandas==1.3.3
+5 pyarrow==5.0.0
+
+File: airflow_dags/dags/refunds_processing_dag.py
+1 from airflow import DAG
+2 from airflow.operators.python_operator import PythonOperator
+3 from datetime import datetime, timedelta
+4 from hooks.azure_file_share_hook import AzureFileShareHook
+5 from hooks.azure_blob_storage_hook import AzureBlobStorageHook
+6 from utils.file_operations import list_json_files, copy_files_to_local, read_latest_file
+7 from utils.dataframe_operations import apply_schema, write_to_parquet
+8 
+9 default_args = {
+10     'owner': 'airflow',
+11     'depends_on_past': False,
+12     'email_on_failure': False,
+13     'email_on_retry': False,
+14     'retries': 1,
+15     'retry_delay': timedelta(minutes=5),
+16 }
+17 
+18 dag = DAG(
+19     'refunds_processing_dag',
+20     default_args=default_args,
+21     description='A DAG to process refund JSON files',
+22     schedule_interval=timedelta(days=1),
+23     start_date=datetime(2023, 1, 1),
+24     catchup=False,
+25 )
+26 
+27 def process_refunds():
+28     azure_file_share_hook = AzureFileShareHook(conn_id='azure_file_share_default')
+29     azure_blob_storage_hook = AzureBlobStorageHook(conn_id='azure_blob_storage_default')
+30     
+31     # List JSON files
+32     json_files = list_json_files(azure_file_share_hook, 'path/to/fileshare', r'^Refunds_.*\.json$')
+33     
+34     # Copy files to local
+35     local_files = copy_files_to_local(azure_file_share_hook, json_files, '/tmp/airflow/refunds')
+36     
+37     # Read the latest file
+38     latest_file = read_latest_file(local_files, r'^Refunds_(\d{8})\.json$')
+39     
+40     # Apply schema
+41     schema = {'col1': 'string', 'col2': 'VARCHAR(10)', 'col3': 'FLOAT(64)'}
+42     df = apply_schema(latest_file, schema)
+43     
+44     # Write to Parquet
+45     parquet_file = write_to_parquet(df, '/tmp/airflow/refunds/output.parquet')
+46     
+47     # Upload to Blob Storage
+48     upload_to_blob_storage(azure_blob_storage_hook, parquet_file, 'path/to/blobstorage')
+49 
+50 process_refunds_task = PythonOperator(
+51     task_id='process_refunds',
+52     python_callable=process_refunds,
+53     dag=dag,
+54 )
+55 
+56 process_refunds_task
+
+File: airflow_dags/hooks/azure_file_share_hook.py
+1 from airflow.hooks.base_hook import BaseHook
+2 from azure.storage.fileshare import ShareFileClient
+3 
+4 class AzureFileShareHook(BaseHook):
+5     def __init__(self, conn_id):
+6         self.conn_id = conn_id
+7         self.connection = self.get_connection(conn_id)
+8         self.share_name = self.connection.extra_dejson.get('share_name')
+9         self.file_client = ShareFileClient.from_connection_string(
+10             self.connection.extra_dejson.get('connection_string'),
+11             share_name=self.share_name
+12         )
+13 
+14     def list_files(self, directory_path):
+15         return self.file_client.list_directories_and_files(directory_path)
+16 
+17     def download_file(self, file_path, local_path):
+18         with open(local_path, "wb") as file_handle:
+19             data = self.file_client.download_file(file_path)
+20             file_handle.write(data.readall())
+
+File: airflow_dags/hooks/azure_blob_storage_hook.py
+1 from airflow.hooks.base_hook import BaseHook
+2 from azure.storage.blob import BlobServiceClient
+3 
+4 class AzureBlobStorageHook(BaseHook):
+5     def __init__(self, conn_id):
+6         self.conn_id = conn_id
+7         self.connection = self.get_connection(conn_id)
+8         self.container_name = self.connection.extra_dejson.get('container_name')
+9         self.blob_service_client = BlobServiceClient.from_connection_string(
+10             self.connection.extra_dejson.get('connection_string')
+11         )
+12 
+13     def upload_file(self, local_path, blob_path):
+14         blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=blob_path)
+15         with open(local_path, "rb") as data:
+16             blob_client.upload_blob(data)
+
+File: airflow_dags/utils/file_operations.py
+1 import re
+2 import os
+3 from datetime import datetime
+4 
+5 def list_json_files(azure_file_share_hook, directory_path, regex_pattern):
+6     files = azure_file_share_hook.list_files(directory_path)
+7     return [file['name'] for file in files if re.match(regex_pattern, file['name'])]
+8 
+9 def copy_files_to_local(azure_file_share_hook, files, local_directory):
+10     if not os.path.exists(local_directory):
+11         os.makedirs(local_directory)
+12     local_files = []
+13     for file in files:
+14         local_path = os.path.join(local_directory, os.path.basename(file))
+15         azure_file_share_hook.download_file(file, local_path)
+16         local_files.append(local_path)
+17     return local_files
+18 
+19 def read_latest_file(files, regex_pattern):
+20     latest_date = None
+21     latest_file = None
+22     for file in files:
+23         match = re.match(regex_pattern, os.path.basename(file))
+24         if match:
+25             file_date = datetime.strptime(match.group(1), '%Y%m%d')
+26             if not latest_date or file_date > latest_date:
+27                 latest_date = file_date
+28                 latest_file = file
+29     return latest_file
+
+File: airflow_dags/utils/dataframe_operations.py
+1 import pandas as pd
+2 import pyarrow as pa
+3 import pyarrow.parquet as pq
+4 
+5 def apply_schema(file_path, schema):
+6     df = pd.read_json(file_path)
+7     for col, dtype in schema.items():
+8         if dtype.lower() == 'string':
+9             df[col] = df[col].astype(str)
+10         elif dtype.lower().startswith('varchar'):
+11             df[col] = df[col].astype(str)
+12         elif dtype.lower().startswith('float'):
+13             df[col] = df[col].astype(float)
+14     return df
+15 
+16 def write_to_parquet(df, output_path):
+17     table = pa.Table.from_pandas(df)
+18     pq.write_table(table, output_path)
+19     return output_path
+
+```
+
+================================== Ai Message ==================================
+
+```sh
+#!/bin/bash
+
+# Install dependencies
+pip install -r airflow_dags/requirements.txt
+
+# Run the Airflow scheduler and webserver in parallel
+airflow scheduler & airflow webserver &
+
+# Wait for background processes to finish
+wait
+```

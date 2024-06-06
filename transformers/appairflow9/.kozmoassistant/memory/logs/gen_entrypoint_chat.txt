@@ -1,0 +1,205 @@
+
+2024-06-06T08:41:55.098647
+================================ System Message ================================
+
+You will get information about a codebase that is currently on disk in the current folder.
+The user will ask you to write a script that runs the code in a specific way.
+You will answer with code blocks that include all the necessary terminal commands.
+Do not install globally. Do not use sudo.
+Do not explain the code, just give the commands.
+Do not use placeholders, use example values (like . for a folder argument) if necessary.
+
+
+================================ Human Message =================================
+
+
+        Make a unix script that
+        a) installs dependencies
+        b) runs all necessary parts of the codebase (in parallel if necessary)
+        
+Information about the codebase:
+
+```
+File: dags/azure_refunds_dag.py
+1 from airflow import DAG
+2 from airflow.operators.python_operator import PythonOperator
+3 from datetime import datetime, timedelta
+4 from azure_file_share_hook import AzureFileShareHook
+5 from utils import list_json_files, copy_files_to_local, read_latest_file, apply_schema, write_to_parquet, upload_to_blob_storage
+6 
+7 default_args = {
+8     'owner': 'airflow',
+9     'depends_on_past': False,
+10     'start_date': datetime(2023, 10, 1),
+11     'email_on_failure': False,
+12     'email_on_retry': False,
+13     'retries': 1,
+14     'retry_delay': timedelta(minutes=5),
+15 }
+16 
+17 dag = DAG(
+18     'azure_refunds_dag',
+19     default_args=default_args,
+20     description='A DAG to process refund JSON files from Azure File Share',
+21     schedule_interval=timedelta(days=1),
+22 )
+23 
+24 azure_conn_id = 'azure_default'
+25 share_name = 'your-share-name'
+26 directory_name = 'your-directory-name'
+27 local_path = '/tmp/airflow/refunds'
+28 schema = {'col1': 'string', 'col2': 'VARCHAR(10)', 'col3': 'FLOAT(64)'}
+29 
+30 list_files_task = PythonOperator(
+31     task_id='list_json_files',
+32     python_callable=list_json_files,
+33     op_kwargs={'azure_conn_id': azure_conn_id, 'share_name': share_name, 'directory_name': directory_name},
+34     dag=dag,
+35 )
+36 
+37 copy_files_task = PythonOperator(
+38     task_id='copy_files_to_local',
+39     python_callable=copy_files_to_local,
+40     op_kwargs={'azure_conn_id': azure_conn_id, 'share_name': share_name, 'directory_name': directory_name, 'local_path': local_path},
+41     dag=dag,
+42 )
+43 
+44 read_latest_file_task = PythonOperator(
+45     task_id='read_latest_file',
+46     python_callable=read_latest_file,
+47     op_kwargs={'local_path': local_path},
+48     dag=dag,
+49 )
+50 
+51 apply_schema_task = PythonOperator(
+52     task_id='apply_schema',
+53     python_callable=apply_schema,
+54     op_kwargs={'schema': schema},
+55     dag=dag,
+56 )
+57 
+58 write_to_parquet_task = PythonOperator(
+59     task_id='write_to_parquet',
+60     python_callable=write_to_parquet,
+61     op_kwargs={'local_path': local_path},
+62     dag=dag,
+63 )
+64 
+65 upload_to_blob_storage_task = PythonOperator(
+66     task_id='upload_to_blob_storage',
+67     python_callable=upload_to_blob_storage,
+68     op_kwargs={'local_path': local_path, 'azure_conn_id': azure_conn_id},
+69     dag=dag,
+70 )
+71 
+72 list_files_task >> copy_files_task >> read_latest_file_task >> apply_schema_task >> write_to_parquet_task >> upload_to_blob_storage_task
+
+File: plugins/azure_file_share_hook.py
+1 from airflow.hooks.base_hook import BaseHook
+2 from azure.storage.fileshare import ShareServiceClient
+3 
+4 class AzureFileShareHook(BaseHook):
+5     def __init__(self, azure_conn_id='azure_default'):
+6         self.conn_id = azure_conn_id
+7         self.connection = self.get_conn()
+8 
+9     def get_conn(self):
+10         conn = self.get_connection(self.conn_id)
+11         return ShareServiceClient(account_url=conn.extra_dejson.get('account_url'), credential=conn.password)
+12 
+13     def list_files(self, share_name, directory_name):
+14         share_client = self.connection.get_share_client(share_name)
+15         directory_client = share_client.get_directory_client(directory_name)
+16         return [file.name for file in directory_client.list_directories_and_files()]
+17 
+18     def download_file(self, share_name, directory_name, file_name, local_path):
+19         share_client = self.connection.get_share_client(share_name)
+20         directory_client = share_client.get_directory_client(directory_name)
+21         file_client = directory_client.get_file_client(file_name)
+22         with open(f"{local_path}/{file_name}", "wb") as file_handle:
+23             data = file_client.download_file()
+24             data.readinto(file_handle)
+
+File: plugins/utils.py
+1 import os
+2 import re
+3 import pandas as pd
+4 from azure_file_share_hook import AzureFileShareHook
+5 from datetime import datetime
+6 from pyarrow import parquet as pq
+7 
+8 def list_json_files(azure_conn_id, share_name, directory_name):
+9     hook = AzureFileShareHook(azure_conn_id)
+10     files = hook.list_files(share_name, directory_name)
+11     json_files = [file for file in files if re.match(r'^Refunds_.*\.json$', file)]
+12     return json_files
+13 
+14 def copy_files_to_local(azure_conn_id, share_name, directory_name, local_path):
+15     hook = AzureFileShareHook(azure_conn_id)
+16     json_files = list_json_files(azure_conn_id, share_name, directory_name)
+17     if not os.path.exists(local_path):
+18         os.makedirs(local_path)
+19     for file in json_files:
+20         hook.download_file(share_name, directory_name, file, local_path)
+21 
+22 def read_latest_file(local_path):
+23     files = [f for f in os.listdir(local_path) if re.match(r'^Refunds_\d{8}\.json$', f)]
+24     latest_file = max(files, key=lambda x: datetime.strptime(re.search(r'\d{8}', x).group(), '%Y%m%d'))
+25     df = pd.read_json(f"{local_path}/{latest_file}")
+26     return df, latest_file
+27 
+28 def apply_schema(df, schema):
+29     for col, dtype in schema.items():
+30         if dtype.lower() == 'string':
+31             df[col] = df[col].astype(str)
+32         elif dtype.lower().startswith('varchar'):
+33             df[col] = df[col].astype(str)
+34         elif dtype.lower().startswith('float'):
+35             df[col] = df[col].astype(float)
+36     return df
+37 
+38 def write_to_parquet(df, local_path, latest_file):
+39     date_str = re.search(r'\d{8}', latest_file).group()
+40     date = datetime.strptime(date_str, '%Y%m%d')
+41     partition_path = f"{local_path}/parquet/{date.year}/{date.month:02d}/{date.day:02d}"
+42     if not os.path.exists(partition_path):
+43         os.makedirs(partition_path)
+44     parquet_file = f"{partition_path}/Refunds_{date_str}.parquet"
+45     df.to_parquet(parquet_file)
+46     return parquet_file
+47 
+48 def upload_to_blob_storage(local_path, azure_conn_id):
+49     from azure.storage.blob import BlobServiceClient
+50     hook = AzureFileShareHook(azure_conn_id)
+51     conn = hook.get_conn()
+52     blob_service_client = BlobServiceClient(account_url=conn.account_url, credential=conn.credential)
+53     container_name = 'your-container-name'
+54     parquet_files = [os.path.join(dp, f) for dp, dn, filenames in os.walk(local_path) for f in filenames if f.endswith('.parquet')]
+55     for file in parquet_files:
+56         blob_client = blob_service_client.get_blob_client(container=container_name, blob=file.replace(local_path, '').lstrip('/'))
+57         with open(file, "rb") as data:
+58             blob_client.upload_blob(data)
+
+File: requirements.txt
+1 apache-airflow
+2 azure-storage-file-share
+3 azure-storage-blob
+4 pandas
+5 pyarrow
+
+```
+
+================================== Ai Message ==================================
+
+```sh
+#!/bin/bash
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run Airflow scheduler and webserver in parallel
+airflow scheduler & airflow webserver &
+
+# Wait for background processes to finish
+wait
+```

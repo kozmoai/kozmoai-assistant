@@ -1,0 +1,274 @@
+
+2024-06-06T08:38:46.985526
+================================ System Message ================================
+
+You will get instructions for code to write.
+You will write a very long answer. Make sure that every detail of the architecture is, in the end, implemented as code.
+Think step by step and reason yourself to the correct decisions to make sure we get it right.
+First lay out the names of the core classes, functions, methods that will be necessary, As well as a quick comment on their purpose.
+
+You will output the content of each file necessary to achieve the goal, including ALL code.
+Represent files like so:
+
+FILENAME
+```
+CODE
+```
+
+The following tokens must be replaced like so:
+FILENAME is the lowercase combined path and file name including the file extension
+CODE is the code in the file
+
+Example representation of a file:
+
+src/hello_world.py
+```
+print("Hello World")
+```
+
+Do not comment on what every file does. Please note that the code should be fully functional. No placeholders.
+
+
+You will start with the "entrypoint" file, then go to the ones that are imported by that file, and so on.
+Please note that the code should be fully functional. No placeholders.
+
+Follow a language and framework appropriate best practice file naming convention.
+Make sure that files contain all imports, types etc.  The code should be fully functional. Make sure that code in different files are compatible with each other.
+Ensure to implement all code, if you are unsure, write a plausible implementation.
+Include module dependency or package manager dependency definition file.
+Before you finish, double check that all parts of the architecture is present in the files.
+
+When you are done, write finish with "this concludes a fully working implementation".
+
+Useful to know:
+Almost always put different classes in different files.
+Always use the programming language the user asks for.
+For Python, you always create an appropriate requirements.txt file.
+For NodeJS, you always create an appropriate package.json file.
+Always add a comment briefly describing the purpose of the function definition.
+Add comments explaining very complex bits of logic.
+Always follow the best practices for the requested languages for folder/file structure and how to package the project.
+
+
+Python toolbelt preferences:
+- pytest
+- dataclasses
+
+
+================================ Human Message =================================
+
+Request: I need an airflow tasks that lists all json files in a specific path in azure files share based on a regex match if the file name starts with `Refunds_`, then copies into local airflow and reads the latest file based on regex match `Refunds_` and a date in the file name, for example I have 4 files under the same path : Refunds_20240606.json / Refunds_20240605.json / Ref_20240607.json / Refunds_rejections_20240606.json, the code should read only one file Refunds_20240606.json, then applies a specific schema to the loaded dataframe base on a dictionary schema like {'col1': 'string', 'col2': 'VARCHAR(10)', 'col3': 'FLOAT(64)'} compatible with snowflake's supported data types then writes the dataframe into a parquet file then uploads the parquet file into azure blob storage based an a partition YYYY/MM/DD created from the date in the file name
+
+================================== Ai Message ==================================
+
+To achieve the desired functionality using Apache Airflow, we will create a DAG (Directed Acyclic Graph) that performs the following tasks:
+
+1. Lists all JSON files in a specific path in Azure File Share based on a regex match if the file name starts with `Refunds_`.
+2. Copies the matched files into the local Airflow environment.
+3. Reads the latest file based on the regex match `Refunds_` and a date in the file name.
+4. Applies a specific schema to the loaded DataFrame.
+5. Writes the DataFrame into a Parquet file.
+6. Uploads the Parquet file into Azure Blob Storage based on a partition `YYYY/MM/DD` created from the date in the file name.
+
+We will use the following core classes and functions:
+- `AzureFileShareHook`: Custom hook to interact with Azure File Share.
+- `AzureBlobStorageHook`: Custom hook to interact with Azure Blob Storage.
+- `list_json_files`: Function to list JSON files in Azure File Share.
+- `copy_files_to_local`: Function to copy files to the local Airflow environment.
+- `read_latest_file`: Function to read the latest file based on the regex match.
+- `apply_schema`: Function to apply the schema to the DataFrame.
+- `write_parquet`: Function to write the DataFrame into a Parquet file.
+- `upload_to_blob_storage`: Function to upload the Parquet file to Azure Blob Storage.
+
+Let's start by defining the necessary files and their content.
+
+### requirements.txt
+```
+apache-airflow
+azure-storage-file-share
+azure-storage-blob
+pandas
+pyarrow
+```
+
+### dags/azure_file_share_to_blob.py
+```python
+from airflow import DAG
+from airflow.operators.python_operator import PythonOperator
+from datetime import datetime, timedelta
+from azure_file_share_hook import AzureFileShareHook
+from azure_blob_storage_hook import AzureBlobStorageHook
+import pandas as pd
+import pyarrow.parquet as pq
+import re
+import os
+
+default_args = {
+    'owner': 'airflow',
+    'depends_on_past': False,
+    'start_date': datetime(2023, 1, 1),
+    'email_on_failure': False,
+    'email_on_retry': False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=5),
+}
+
+dag = DAG(
+    'azure_file_share_to_blob',
+    default_args=default_args,
+    description='A DAG to process JSON files from Azure File Share and upload to Azure Blob Storage',
+    schedule_interval=timedelta(days=1),
+)
+
+def list_json_files():
+    hook = AzureFileShareHook()
+    return hook.list_files()
+
+def copy_files_to_local(file_list):
+    hook = AzureFileShareHook()
+    for file in file_list:
+        hook.download_file(file, '/tmp/airflow/')
+
+def read_latest_file():
+    files = [f for f in os.listdir('/tmp/airflow/') if re.match(r'Refunds_\d{8}\.json', f)]
+    latest_file = max(files, key=lambda x: datetime.strptime(re.search(r'\d{8}', x).group(), '%Y%m%d'))
+    return latest_file
+
+def apply_schema(file_name):
+    schema = {'col1': 'string', 'col2': 'VARCHAR(10)', 'col3': 'FLOAT(64)'}
+    df = pd.read_json(f'/tmp/airflow/{file_name}')
+    for col, dtype in schema.items():
+        if dtype.startswith('VARCHAR'):
+            df[col] = df[col].astype(str)
+        elif dtype.startswith('FLOAT'):
+            df[col] = df[col].astype(float)
+    return df
+
+def write_parquet(df, file_name):
+    date_str = re.search(r'\d{8}', file_name).group()
+    date = datetime.strptime(date_str, '%Y%m%d')
+    partition_path = date.strftime('%Y/%m/%d')
+    parquet_file = f'/tmp/airflow/{partition_path}/data.parquet'
+    os.makedirs(os.path.dirname(parquet_file), exist_ok=True)
+    df.to_parquet(parquet_file)
+    return parquet_file
+
+def upload_to_blob_storage(parquet_file):
+    hook = AzureBlobStorageHook()
+    hook.upload_file(parquet_file, 'my-container', parquet_file.replace('/tmp/airflow/', ''))
+
+list_files_task = PythonOperator(
+    task_id='list_json_files',
+    python_callable=list_json_files,
+    dag=dag,
+)
+
+copy_files_task = PythonOperator(
+    task_id='copy_files_to_local',
+    python_callable=copy_files_to_local,
+    op_args=['{{ ti.xcom_pull(task_ids="list_json_files") }}'],
+    dag=dag,
+)
+
+read_latest_file_task = PythonOperator(
+    task_id='read_latest_file',
+    python_callable=read_latest_file,
+    dag=dag,
+)
+
+apply_schema_task = PythonOperator(
+    task_id='apply_schema',
+    python_callable=apply_schema,
+    op_args=['{{ ti.xcom_pull(task_ids="read_latest_file") }}'],
+    dag=dag,
+)
+
+write_parquet_task = PythonOperator(
+    task_id='write_parquet',
+    python_callable=write_parquet,
+    op_args=['{{ ti.xcom_pull(task_ids="apply_schema") }}', '{{ ti.xcom_pull(task_ids="read_latest_file") }}'],
+    dag=dag,
+)
+
+upload_to_blob_storage_task = PythonOperator(
+    task_id='upload_to_blob_storage',
+    python_callable=upload_to_blob_storage,
+    op_args=['{{ ti.xcom_pull(task_ids="write_parquet") }}'],
+    dag=dag,
+)
+
+list_files_task >> copy_files_task >> read_latest_file_task >> apply_schema_task >> write_parquet_task >> upload_to_blob_storage_task
+```
+
+### plugins/hooks/azure_file_share_hook.py
+```python
+from airflow.hooks.base_hook import BaseHook
+from azure.storage.fileshare import ShareServiceClient
+import os
+
+class AzureFileShareHook(BaseHook):
+    def __init__(self, conn_id='azure_file_share_default'):
+        self.conn_id = conn_id
+        self.connection = self.get_connection(conn_id)
+        self.service_client = ShareServiceClient(account_url=self.connection.host, credential=self.connection.password)
+
+    def list_files(self):
+        file_list = []
+        share_client = self.service_client.get_share_client(self.connection.schema)
+        dir_client = share_client.get_directory_client(self.connection.extra_dejson.get('directory'))
+        for item in dir_client.list_directories_and_files():
+            if item['name'].startswith('Refunds_') and item['name'].endswith('.json'):
+                file_list.append(item['name'])
+        return file_list
+
+    def download_file(self, file_name, local_path):
+        share_client = self.service_client.get_share_client(self.connection.schema)
+        dir_client = share_client.get_directory_client(self.connection.extra_dejson.get('directory'))
+        file_client = dir_client.get_file_client(file_name)
+        with open(os.path.join(local_path, file_name), 'wb') as file:
+            data = file_client.download_file()
+            data.readinto(file)
+```
+
+### plugins/hooks/azure_blob_storage_hook.py
+```python
+from airflow.hooks.base_hook import BaseHook
+from azure.storage.blob import BlobServiceClient
+
+class AzureBlobStorageHook(BaseHook):
+    def __init__(self, conn_id='azure_blob_storage_default'):
+        self.conn_id = conn_id
+        self.connection = self.get_connection(conn_id)
+        self.service_client = BlobServiceClient(account_url=self.connection.host, credential=self.connection.password)
+
+    def upload_file(self, local_file, container_name, blob_name):
+        blob_client = self.service_client.get_blob_client(container=container_name, blob=blob_name)
+        with open(local_file, 'rb') as data:
+            blob_client.upload_blob(data, overwrite=True)
+```
+
+### airflow/connections/azure_file_share_default.json
+```json
+{
+    "conn_id": "azure_file_share_default",
+    "conn_type": "azure_fileshare",
+    "host": "https://<your-account-name>.file.core.windows.net",
+    "login": "<your-account-name>",
+    "password": "<your-account-key>",
+    "schema": "<your-file-share-name>",
+    "extra": "{\"directory\": \"<your-directory-name>\"}"
+}
+```
+
+### airflow/connections/azure_blob_storage_default.json
+```json
+{
+    "conn_id": "azure_blob_storage_default",
+    "conn_type": "azure_blob_storage",
+    "host": "https://<your-account-name>.blob.core.windows.net",
+    "login": "<your-account-name>",
+    "password": "<your-account-key>"
+}
+```
+
+This concludes a fully working implementation.
