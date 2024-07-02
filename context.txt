@@ -1,0 +1,474 @@
+I need a python function that reads a csv or json file with utf8 encoding into a pyarrow table, then applies a schema from an input schema dictionnary like [{'name': 'colname1', 'type': 'DATETIME'}, {'name': 'colname2', 'type': 'INT'}, {'name': 'colname3', 'type': 'VARCHAR'}, ...], then write the formatted pyarrow table into a parquet file
+
+
+I need a python function that reads a list of paths to csv files or json files like ['data/file1.csv', 'data/file2.csv'] or ['data/file1.json', 'data/file2.json']  with utf8 encoding into a pyarrow table, then applies a schema from an input schema dictionnary like [{'name': 'colname1', 'type': 'DATETIME', 'new_name': 'mycolname1', 'new_type': 'DATETIME'}, {'name': 'colname2', 'type': 'INT', 'new_name': 'mycolname2', 'new_type': 'FLOAT'}, {'name': 'colname3', 'type': 'VARCHAR', 'new_name': 'mycolname3', 'new_type': 'STRING'}, ...], then rename and cast the table columns based on the keys name -> new_name and type -> new_type and check that the new data types are supported by snowflake, then write the formatted pyarrow table into a parquet file
+
+
+I have an input dictionnary like {"contenantId": "123456789", "list-ide12": [78, 2469486311]} and an input list like [400, 500, 600] and I need an output list of dictionnaries as cartesian product between the dictionnary and a list like [{"ide12": 78, "territory": 400, "Date": now()}, {"ide12": 78, "territory": 500, "Date": now()}, {"ide12": 78, "territory": 600, "Date": now()}, {"ide12": 2469486311, "territory": 400, "Date": now()}, {"ide12": 2469486311, "territory": 500, "Date": now()}, {"ide12": 2469486311, "territory": 600, "Date": now()}]
+
+
+I have an input dictionnary like {"requestId": "request-12344", "queryDate": "14/05/2024", "annotation": [{"ide12": 3574264211, "territory": 250, "Date": now(), "errorInfo": null, "result": {"ide12rep": 3574264211, "pr": 0.0, "dp": 100.0, "pai": 0.0, "ns": 0.0}}, {"ide12": 3574264211, "territory": 800, "Date": now(), "errorInfo": null, "result": {"ide12rep": 3574264211, "pr": 0.2, "dp": 100.0, "pai": 0.3, "ns": 0.0}}, {"ide12": 3574264211, "territory": 400, "Date": now(), "errorInfo": null, "result": {"ide12rep": 3574264211, "pr": 0.0, "dp": 50.0, "pai": 0.0, "ns": 0.54}}, {"ide12": 123456, "territory": 250, "Date": now(), "errorInfo": null, "result": {"ide12rep": 123456, "pr": 1.0, "dp": 90.0, "pai": 1.0, "ns": 1.0}}, {"ide12": 123456, "territory": 800, "Date": now(), "errorInfo": null, "result": {"ide12rep": 123456, "pr": 1.2, "dp": 80.0, "pai": 1.3, "ns": 1.0}}, {"ide12": 123456, "territory": 400, "Date": now(), "errorInfo": null, "result": {"ide12rep": 123456, "pr": 3.0, "dp": 60.0, "pai": 1.0, "ns": 1.54}}]} And I expect a formatted dictionnary like : {"containerId": "some_id", "records": [{"ide12": 3574264211, "results": [{"territory": 250, "dp": 100.0, "pai": 0.0, "ns": 0.0, "pr": 0.0}]}, {"ide12": 3574264211, "results": [{"territory": 400, "dp": 50.0, "pai": 0.0, "ns": 0.54, "pr": 0.0}]}, {"ide12": 123456, "results": [{"territory": 250, "dp": 90.0, "pai": 1.0, "ns": 1.0, "pr": 1.0}]}, {"ide12": 123456, "results": [{"territory": 400, "dp": 60.0, "pai": 1.0, "ns": 1.54, "pr": 3.0}]}]}
+
+
+
+
+
+
+
+{
+    "requestId": "request-12344",
+    "queryDate": "14/05/2024",
+    "annotation": [
+    {
+        "ide12": 3574264211,
+        "territory": 250,
+        "Date": now(),
+        "errorInfo": null,
+        "result": {"ide12rep": 3574264211, "pr": 0.0, "dp": 100.0, "pai": 0.0, "ns": 0.0}
+    },
+    {
+        "ide12": 123456,
+        "territory": 250,
+        "Date": now(),
+        "errorInfo": null,
+        "result": {"ide12rep": 123456, "pr": 1.0, "dp": 90.0, "pai": 1.0, "ns": 1.0}
+    },
+    {
+        "ide12": 123456,
+        "territory": 400,
+        "Date": now(),
+        "errorInfo": null, "result": {"ide12rep": 123456, "pr": 3.0, "dp": 60.0, "pai": 1.0, "ns": 1.54}
+    }
+    ]
+}
+
+And I expect a formatted dictionnary like :
+
+{
+    "containerId": "some_id",
+    "records": [
+    {
+        "ide12": 3574264211,
+        "results": [
+        {
+            "territory": 250,
+            "dp": 100.0,
+            "pai": 0.0,
+            "ns": 0.0,
+            "pr": 0.0
+        }
+        ]
+    },
+
+    {
+        "ide12": 3574264211,
+        "results": [
+        {
+            "territory": 400,
+            "dp": 50.0,
+            "pai": 0.0,
+            "ns": 0.54,
+            "pr": 0.0
+        }
+        ]
+    },
+
+    {
+        "ide12": 123456,
+        "results": [
+        {
+            "territory": 250,
+            "dp": 90.0,
+            "pai": 1.0,
+            "ns": 1.0,
+            "pr": 1.0
+        }
+        ]
+    },
+
+    {
+        "ide12": 123456,
+        "results": [
+        {
+            "territory": 400,
+            "dp": 60.0,
+            "pai": 1.0,
+            "ns": 1.54,
+            "pr": 3.0
+        }
+        ]
+    }
+
+    ]
+}
+
+
+
+
+I have an input dictionnary like {"contenantId": "con_id", "listIde12": [{"ide12": "78", "seq": "12", "idContent": 'id123', "timeRatio": '50'}, {"ide12": "12", "seq": "34", "idContent": 'id12354', "timeRatio": '30'}}]} and an input list like [400, 500] and I need an output list of dictionnaries as cartesian product between the dictionnary and a list like [{'ide12': '78', 'territory': 400, 'seq': '12', 'timeRatio': '50', 'Date': now()},{'ide12': '78', 'territory': 500, 'seq': '12', 'timeRatio': '50', 'Date': now()}, {'ide12': '12', 'territory': 400, 'seq': '34', 'timeRatio': '30', 'Date': now()}, {'ide12': '12', 'territory': 500, 'seq': '34', 'timeRatio': '30', 'Date': now()}]
+
+
+
+
+{"contenantId": "con_id", "listIde12": [{"ide12": "78", "seq": "12", "idContent": 'id123', "timeRatio": '50'}, {"ide12": "12", "seq": "34", "idContent": 'id12354', "timeRatio": '30'}}]}
+
+
+
+[{'ide12': '78', 'territory': 400, 'seq': '12', 'timeRatio': '50', 'Date': now()},{'ide12': '78', 'territory': 500, 'seq': '12', 'timeRatio': '50', 'Date': now()}, {'ide12': '12', 'territory': 400, 'seq': '34', 'timeRatio': '30', 'Date': now()}, {'ide12': '12', 'territory': 500, 'seq': '34', 'timeRatio': '30', 'Date': now()}]
+
+----------
+
+
+request =
+[
+    {
+        'ide12': '78',
+        'territory': 400,
+        'Date': '2024-06-12 15:32:16'
+    },
+    {
+        'ide12': '78',
+        'territory': 500,
+        'Date': '2024-06-12 15:32:16'
+    },
+    {
+        'ide12': '78',
+        'territory': 600,
+        'Date': '2024-06-12 15:32:16'
+    },
+    {
+        'ide12': '12',
+        'territory': 400,
+        'Date': '2024-06-12 15:32:16'
+    },
+    {
+        'ide12': '12',
+        'territory': 500,
+        'Date': '2024-06-12 15:32:16'
+    },
+    {
+        'ide12': '12',
+        'territory': 600,
+        'Date': '2024-06-12 15:32:16'
+    },
+    {
+        'ide12': '',
+        'territory': 400,
+        'Date': '2024-06-12 15:32:16'
+    },
+    {
+        'ide12': '',
+        'territory': 500,
+        'Date': '2024-06-12 15:32:16'
+    },
+    {
+        'ide12': '',
+        'territory': 600,
+        'Date': '2024-06-12 15:32:16'
+    }
+]
+
+
+{
+  "container": {
+   "containerId": string,
+   "results": [
+     {
+       "territory": number,
+       "dp": number,
+       "pai": number,
+       "ns": number,
+       "pr": number
+     }
+   ]
+  },
+  "records": [
+   {
+     "ide12": string,
+     "results": [
+       {
+         "territory": number,
+         "dp": number,
+         "pai": number,
+         "ns": number,
+         "pr": number
+       }
+     ]
+   },
+   {
+     "ide12": string,
+     "results": [
+       {
+         "territory": number,
+         "dp": number,
+         "pai": number,
+         "ns": number,
+         "pr": number
+       }
+     ]
+   }
+  ]
+}
+
+
+reponse_raw=
+{
+  "requestId": "req123",
+  "queryDate": now(),
+  "annotation": [
+    {
+      "ide12": "35",
+      "territory": 250,
+      "situationDate": now(),
+      "errorInfo": null,
+      "result": {
+        "ide12rep": "35",
+        "pr": 0.0,
+        "dp": 100.0,
+        "pai": 0.0,
+        "ns": 0.0
+      }
+    },
+    {
+      "ide12": "35",
+      "territory": 350,
+      "situationDate": now(),
+      "errorInfo": null,
+      "result": {
+        "ide12rep": "35",
+        "pr": 0.0,
+        "dp": 90.0,
+        "pai": 10.0,
+        "ns": 0.0
+      }
+    },
+    {
+      "ide12": "10",
+      "territory": 250,
+      "situationDate": now(),
+      "errorInfo": null,
+      "result": {
+        "ide12rep": 109200,
+        "pr": 100.0,
+        "dp": 0.0,
+        "pai": 0.0,
+        "ns": 0.0
+      }
+    },
+    {
+      "ide12": "10",
+      "territory": 350,
+      "situationDate": now(),
+      "errorInfo": null,
+      "result": {
+        "ide12rep": 109200,
+        "pr": 25.0,
+        "dp": 25.0,
+        "pai": 25.0,
+        "ns": 25.0
+      }
+    }
+  ]
+}
+
+
+par_terr =
+{
+  "container": {
+   "containerId": string,
+   "results": [
+     {
+       "territory": terr1,
+       "dp": number,
+       "pai": number,
+       "ns": number,
+       "pr": number
+     },
+     {
+       "territory": terr2,
+       "dp": number,
+       "pai": number,
+       "ns": number,
+       "pr": number
+     }
+   ]
+  }
+}
+
+par_ide12 = [
+   {
+     "ide12": string,
+     "results": [
+       {
+         "territory": terr1,
+         "dp": number,
+         "pai": number,
+         "ns": number,
+         "pr": number
+       },
+       {
+         "territory": terr2,
+         "dp": number,
+         "pai": number,
+         "ns": number,
+         "pr": number
+       }
+     ]
+   },
+   {
+     "ide12": string,
+     "results": [
+       {
+         "territory": terr1,
+         "dp": number,
+         "pai": number,
+         "ns": number,
+         "pr": number
+       },
+       {
+         "territory": terr2,
+         "dp": number,
+         "pai": number,
+         "ns": number,
+         "pr": number
+       }
+     ]
+   }
+]
+
+
+
+
+
+
+
+ide12, territory, dp, pai, ns, pr
+[{"ide12": 123, "results": [{"territory": "100", "dp": 25, "pai": 67, "ns": 45, "pr": 90},]}, {"ide12": 456, "results": [{"territory": "100", "dp": 11, "pai": 22, "ns": 33, "pr": 44}]}]
+
+
+
+I have a pandas dataframe with 4 rows. the columns are ide12, territory, dp, pai, ns, pr. from this dataframe I want to create a list of dictionnaries like : [{"ide12": 123, "results": [{"territory": "100", "dp": 25, "pai": 67, "ns": 45, "pr": 90},{"territory": "40", "dp": 90, "pai": 89, "ns": 78, "pr": 56}]}, {"ide12": 456, "results": [{"territory": "100", "dp": 11, "pai": 22, "ns": 33, "pr": 44},{"territory": "40", "dp": 132, "pai": 222, "ns": 333, "pr": 544}]}]. can you write a python function to do this ?
+
+
+
+
+
+using sql, can you optimise this following snowflake query : with cte as ( select parse_xml(FILE_CONTENT) AS xmldata from READREPLICA.CEVA_INVENTORY ), cto as ( SELECT GET( XMLGET( XMLGET( XMLGET( xmldata, 'InventoryReconciliation' ), 'AdjustmentHeader'), 'Company'), '$') as Company, GET( XMLGET( XMLGET( XMLGET( xmldata, 'InventoryReconciliation' ), 'AdjustmentHeader'), 'LocationID'), '$') as Location, XMLGET( XMLGET( xmldata, 'InventoryReconciliation' ), 'ReconciliationDetails') as ReconciliationDetails, from cte ) select Company :: STRING as Company ,Location :: STRING as LocationID ,GET(  XMLGET( at2.value, 'Style'), '$') :: STRING as style from cto ,lateral FLATTEN( ReconciliationDetails:"$" ) at2
+
+
+
+
+I need a python function that takes as input a dictionnary like : { "contenantId": "con_id", "listIde12": [{"ide12": "50600", "int_seq_num": "12", "idContent": 'id123', "timeRatio": '50'}, {"ide12": "109200", "int_seq_num": "34", "idContent": 'id12354', "timeRatio": '30'}]}
+and returns a list of tuples like : [("50600", "50"),("109200", "30")]
+
+
+
+I need a function that takes as input a string of strings like : "40, 100, 208" and return a list of strings like : ['40', '100', '208']
+
+
+I need to convert a list of tuples like : [(123, 23), (345,76), (56, 123)]  into a dataframe with 2 columns ide12 and timeRation using python
+
+
+I have a dataframe with columns : ide12, territory, dp, pai, ns, pr,  and a second dataframe with columns : ide12, timeRation. I want to join these 2 dataframes on column ide12
+
+
+
+
+I have a dataframe with columns : ide12(string), territory(string), dp(integer), pai(integer), ns(integer), pr(integer), timeRation(integer). I want to create a second dataframe like ide12(string), territory(string), dp = dp * timeRation, pai = pai * timeRation, ns = ns * timeRation, pr = pr * timeRation
+
+
+I have a dataframe with columns : ide12(string), territory(string), dp(float), pai(float), ns(float), pr(float), timeRation(float). I need to cconvert columns dp, pai, ns, pr, timeRation into percentages
+
+
+I have a dataframe with 2 columns : ide12(string), timeRation(float). I need a function that devides the column timeRation by 100
+
+
+I have a dataframe like df = df[['ide12', 'territory', 'dp', 'pai', 'ns', 'pr']]. I need a function to drop column ide12 and and sum(dp) ann sum(pai) and sume(ns) and sum(pr) per territory.
+
+ data = {
+        'ide12': [123, 123, 456, 456],
+        'territory': ['100', '40', '100', '40'],
+        'dp': [25, 25, 11, 13],
+        'pai': [67, 22, 67, 22],
+        'ns': [45, 33, 45, 33],
+        'pr': [90, 44, 90, 44]
+    }
+
+
+
+I have a dictionnary like : {'requestId': 'request-20240620150600', 'annotations': [{'ide12': 50600, 'territory': 724, 'situationDate': '20/06/2024', 'errorInfo': None, 'result': {'ide12rep': 50600, 'dp': 100.0, 'pai': 0.0, 'ns': 0.0, 'pr': 0.0}}, {'ide12': 50600, 'territory': 2043, 'situationDate': '20/06/2024', 'errorInfo': {'ide12rep': 50600, 'errorCode': 4013, 'message': 'Invalid territory code'}, 'result': None}, {'ide12': 109200, 'territory': 642, 'situationDate': '20/06/2024', 'errorInfo': None, 'result': {'ide12rep': 109200, 'dp': 100.0, 'pai': 0.0, 'ns': 0.0, 'pr': 0.0}}, {'ide12': 109200, 'territory': 724, 'situationDate': '20/06/2024', 'errorInfo': None, 'result': {'ide12rep': 109200, 'dp': 100.0, 'pai': 0.0, 'ns': 0.0, 'pr': 0.0}}, {'ide12': 109200, 'territory': 2043, 'situationDate': '20/06/2024', 'errorInfo': {'ide12rep': 109200, 'errorCode': 4013, 'message': 'Invalid territory code'}, 'result': None}]}. using a python I need to remove keys like 'result': None
+
+
+
+
+I have a dictionary like : {"requestId": "request-20240620214958", "queryDate": "20240620", "annotations": [{"ide12": 50600, "territory": 40, "situationDate": "20/06/2024", "errorInfo": None, "result": {"ide12rep": 50600, "dp": 100.0, "pai": 0.0, "ns": 0.0, "pr": 0.0}},{"ide12": 50600, "territory": 100, "situationDate": "20/06/2024", "errorInfo": None, "result": {"ide12rep": 50600, "dp": 100.0, "pai": 0.0, "ns": 0.0, "pr": 0.0}},{"ide12": 109200, "territory": 40, "situationDate": "20/06/2024", "errorInfo": None, "result": {"ide12rep": 109200, "dp": 100.0, "pai": 0.0, "ns": 0.0, "pr": 0.0}},{"ide12": 109200, "territory": 100, "situationDate": "20/06/2024", "errorInfo": None, "result": {"ide12rep": 109200, "dp": 100.0, "pai": 0.0, "ns": 0.0, "pr": 0.0}},]} I need to retrieve the values for 'territory', 'dp', 'pai', 'ns', 'pr' and then create a dataframe like df[['territory', 'dp', 'pai', 'ns', 'pr']]
+
+
+
+I need a python  that takes as input a dataframe pd.DataFrame([('100', '40', 30, 20, 6, 4), ('100', '50', 70, 60, 14, 12), ('200', '40', 31, 21, 16, 14), ('200', '50', 71, 61, 142, 121)], columns=['ide12', 'territory',  'dp',  'pai',  'ns',  'pr'])
+and returns a list of dictionaries, each row of the dataframe as a dictionary but grouped by the column ide12 like : [{"ide12": "100","results": [{"territory": "40","dp": 30,"pai": 20,"ns": 6,"pr": 4},{"territory": "50","dp": 70,"pai": 60,"ns": 14,"pr": 12}]},{"ide12": "200","results": [{"territory": "40","dp": 31,"pai": 21,"ns": 16,"pr": 14},{"territory": "50","dp": 71,"pai": 61,"ns": 142,"pr": 121}]}]
+
+
+[{"territory": '40',"dp": 30,"pai": 20,"ns": 6,"pr": 4}, {"territory": '50',"dp": 70,"pai": 60,"ns": 14,"pr": 12}]
+
+
+
+I need a python  that takes as input a dataframe pd.DataFrame([('100', '40', 30, 20, 6, 4), ('100', '50', 70, 60, 14, 12)], columns=['ide12', 'territory',  'dp',  'pai',  'ns',  'pr']) and returns a list of dictionaries, each row of the dataframe as a dictionary but grouped by the column ide12 like : [{"ide12": "100","results": [{"territory": "40","dp": 30,"pai": 20,"ns": 6,"pr": 4},{"territory": "50","dp": 70,"pai": 60,"ns": 14,"pr": 12}]}]
+
+
+
+I need a function that expects a dictionnary like {"containerId": "500000308013","listIde12": [{"ide12": "3724065811","timeRatio": "7.70%"},{"ide12": "3770577011","timeRatio": "9.50%"}]} and converts a percentage string into a float and returns a dict like : {"containerId": "500000308013","listIde12": [{"ide12": "3724065811","timeRatio": 0.077},{"ide12": "3770577011","timeRatio": 0.0950}]}
+
+
+I have a dictionary of dictionaries like : {"container": {"containerId": "500000308013", "results": [{"territory": "40", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 16.19}, {"territory": "2043", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 0.0}]}, "records": [{"ide12": "3770577011", "results": [{"territory": "40", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "2043", "dp": None, "pai": None, "ns": None, "pr": None}]}, {"ide12": "3770577111", "results": [{"territory": "40", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "2043", "dp": None, "pai": None, "ns": None, "pr": None}]}]} if a sub dictionary has all ("dp":0.0 and "pai":0.0 and "ns":0.0 and "pr":0.0) or ("dp":"None" and "pai":"None" and "ns":"None" and "pr":"None") then replace None or 0.0 by None
+
+
+{"container": {"containerId": "500000308013", "results": [{"territory": "40", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "56", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "100", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "203", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "208", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "246", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "250", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "276", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "300", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "348", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "372", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "380", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "528", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "578", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "620", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "642", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "703", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "724", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "752", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "756", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "826", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "2043", "dp": null, "pai": null, "ns": null, "pr": null}]}, "records": [{"ide12": "3402582011", "results": [{"territory": "40", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "100", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "208", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "250", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "300", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "372", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "528", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "620", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "703", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "752", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "826", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "56", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "203", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "246", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "276", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "348", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "380", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "578", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "642", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "724", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "756", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "2043", "dp": None, "pai": None, "ns": None, "pr": None}]}, {"ide12": "3720532111", "results": [{"territory": "40", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "100", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "208", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "250", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "300", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "372", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "528", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "620", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "703", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "752", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "826", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "56", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "203", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "246", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "276", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "348", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "380", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "578", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "642", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "724", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "756", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "2043", "dp": None, "pai": None, "ns": None, "pr": None}]}, {"ide12": "3724065811", "results": [{"territory": "40", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "100", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "208", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "250", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "300", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "372", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "528", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "620", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "703", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "752", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "826", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "56", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "203", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "246", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "276", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "348", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "380", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "578", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "642", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "724", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "756", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "2043", "dp": None, "pai": None, "ns": None, "pr": None}]}, {"ide12": "3759115911", "results": [{"territory": "40", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "100", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "208", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "250", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "300", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "372", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "528", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "620", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "703", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "752", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "826", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "56", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "203", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "246", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "276", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "348", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "380", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "578", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "642", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "724", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "756", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "2043", "dp": None, "pai": None, "ns": None, "pr": None}]}, {"ide12": "3770554611", "results": [{"territory": "40", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "100", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "208", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "250", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "300", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "372", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "528", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "620", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "703", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "752", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "826", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "56", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "203", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "246", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "276", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "348", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "380", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "578", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "642", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "724", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "756", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "2043", "dp": None, "pai": None, "ns": None, "pr": None}]}, {"ide12": "3770568711", "results": [{"territory": "40", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "100", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "208", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "250", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "300", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "372", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "528", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "620", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "703", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "752", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "826", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "56", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "203", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "246", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "276", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "348", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "380", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "578", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "642", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "724", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "756", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "2043", "dp": None, "pai": None, "ns": None, "pr": None}]}, {"ide12": "3770569011", "results": [{"territory": "40", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "100", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "208", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "250", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "300", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "372", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "528", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "620", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "703", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "752", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "826", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "56", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "203", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "246", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "276", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "348", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "380", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "578", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "642", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "724", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "756", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "2043", "dp": None, "pai": None, "ns": None, "pr": None}]}, {"ide12": "3770576211", "results": [{"territory": "40", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "100", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "208", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "250", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "300", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "372", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "528", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "620", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "703", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "752", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "826", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "56", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "203", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "246", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "276", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "348", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "380", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "578", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "642", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "724", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "756", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "2043", "dp": None, "pai": None, "ns": None, "pr": None}]}, {"ide12": "3770576311", "results": [{"territory": "40", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "100", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "208", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "250", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "300", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "372", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "528", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "620", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "703", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "752", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "826", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "56", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "203", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "246", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "276", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "348", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "380", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "578", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "642", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "724", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "756", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "2043", "dp": None, "pai": None, "ns": None, "pr": None}]}, {"ide12": "3770576711", "results": [{"territory": "40", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "100", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "208", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "250", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "300", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "372", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "528", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "620", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "703", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "752", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "826", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "56", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "203", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "246", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "276", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "348", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "380", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "578", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "642", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "724", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "756", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "2043", "dp": None, "pai": None, "ns": None, "pr": None}]}, {"ide12": "3770576911", "results": [{"territory": "40", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "100", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "208", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "250", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "300", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "372", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "528", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "620", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "703", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "752", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "826", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "56", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "203", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "246", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "276", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "348", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "380", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "578", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "642", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "724", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "756", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "2043", "dp": None, "pai": None, "ns": None, "pr": None}]}, {"ide12": "3770577011", "results": [{"territory": "40", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "100", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "208", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "250", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "300", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "372", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "528", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "620", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "703", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "752", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "826", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "56", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "203", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "246", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "276", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "348", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "380", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "578", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "642", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "724", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "756", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "2043", "dp": None, "pai": None, "ns": None, "pr": None}]}, {"ide12": "3770577111", "results": [{"territory": "40", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "100", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "208", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "250", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "300", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "372", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "528", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "620", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "703", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "752", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "826", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "56", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "203", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "246", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "276", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "348", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "380", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "578", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "642", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "724", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "756", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "2043", "dp": None, "pai": None, "ns": None, "pr": None}]}, {"ide12": "3771780611", "results": [{"territory": "40", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "100", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "208", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "250", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "300", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "372", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "528", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "620", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "703", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "752", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "826", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "56", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "203", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "246", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "276", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "348", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "380", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "578", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "642", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "724", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "756", "dp": 0.0, "pai": 0.0, "ns": 0.0, "pr": 100.0}, {"territory": "2043", "dp": None, "pai": None, "ns": None, "pr": None}]}]}
+
+
+
+aws events test-event-pattern --event-pattern "{\"ip\":[\"82.132.218.114\"]}" --event "{\"id\":\" \",\"source\":\"ccoeprefixlist\",\"detail-type\":\" \",\"account\":\" \",\"region\":\" \",\"time\":\"2022-10-17T12:12:12Z\"}"> /dev/null 2>&1
+
+
+I have thousands of csv files pushed to azure fileshare hourly with naming pattern like file_name_yyyymmdd_uuid.csv. I need to get the metadata of each file and calculate the sha and hash of the file
+I need an airflow dag that lists all files added during the last 24h into fileshare and create a state table dataframe with 5 columns : batchDate | file_path_in_fileshare | file_processing_state (done, failed, todo, running) | started_at (the timestamp when the processing started) | ended_at (the timestamp when the processing ended if finished), then insert the row of the state table into snowflake control table.
+
+ and flags the progress into a checkpointing table in snowflake.
+
+
+
+
+
+I need to create unit tests using pytest fot the following code :
+class AnnotationsFormatter:
+    def __init__(self, data: Dict, payload: Dict):
+        self.data = data
+        self.payload = payload
+    def _extract_data(self) -> List[Dict]:
+        annotations = self.data.get("annotations", [])
+        extracted_data = []
+        for annotation in annotations:
+            result = annotation.get("result", {})
+            if result is None:
+                extracted_data.append(
+                    {
+                        "ide12": annotation.get("ide12"),
+                        "territory": annotation.get("territory"),
+                        "dp": None,
+                        "pai": None,
+                        "ns": None,
+                        "pr": None,
+                    }
+                )
+            else:
+                extracted_data.append(
+                    {
+                        "ide12": annotation.get("ide12"),
+                        "territory": annotation.get("territory"),
+                        "dp": result.get("dp"),
+                        "pai": result.get("pai"),
+                        "ns": result.get("ns"),
+                        "pr": result.get("pr"),
+                    }
+                )
+        return extracted_data

@@ -1,5 +1,0 @@
-azure-storage-file-share
-azure-storage-blob
-pandas
-pyyaml
-pyarrow

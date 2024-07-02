@@ -1,5 +1,0 @@
-# Define the schema for the DataFrame
-column1: int
-column2: float
-column3: str
-# Add more columns as needed

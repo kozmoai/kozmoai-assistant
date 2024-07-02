@@ -1,2 +1,0 @@
-apache-airflow==2.3.0
-azure-storage-file-share==12.4.1

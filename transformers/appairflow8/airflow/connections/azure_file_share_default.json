@@ -1,9 +1,0 @@
-{
-    "conn_id": "azure_file_share_default",
-    "conn_type": "azure_fileshare",
-    "host": "https://<your-account-name>.file.core.windows.net",
-    "login": "<your-account-name>",
-    "password": "<your-account-key>",
-    "schema": "<your-file-share-name>",
-    "extra": "{\"directory\": \"<your-directory-name>\"}"
-}
